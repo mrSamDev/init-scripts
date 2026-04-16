@@ -2,7 +2,7 @@
 
 set -e
 
-SCRIPT_VERSION="v1.0.2"
+SCRIPT_VERSION="v1.0.3"
 PROJECT_NAME="my-pimcore-10"
 PIMCORE_VERSION="10.6.9"
 SKELETON_VERSION="v10.2.6"
@@ -304,7 +304,7 @@ wait_for_services() {
     local attempt=1
 
     while [ $attempt -le $max_attempts ]; do
-        if run_docker_compose exec -T php php -v &>/dev/null; then
+        if run_docker_compose exec -T -w /var/www/html php php -v &>/dev/null; then
             log_success "PHP container is ready"
             break
         fi
@@ -322,7 +322,7 @@ wait_for_services() {
     attempt=1
 
     while [ $attempt -le $max_attempts ]; do
-        if run_docker_compose exec -T php php -r \
+        if run_docker_compose exec -T -w /var/www/html php php -r \
             "new PDO('mysql:host=db;port=3306;dbname=pimcore', 'pimcore', 'pimcore');" \
             &>/dev/null; then
             log_success "Database is ready"
@@ -350,11 +350,11 @@ install_pimcore() {
     fi
 
     log_info "Preparing var/ directory..."
-    run_docker_compose exec -T -u root php bash -c \
+    run_docker_compose exec -T -w /var/www/html -u root php bash -c \
         "mkdir -p /var/www/html/var/log /var/www/html/var/cache && chmod -R 777 /var/www/html/var"
 
     log_info "Running Pimcore installer (this can take 5–15 minutes)..."
-    run_docker_compose exec -T -u root php vendor/bin/pimcore-install \
+    run_docker_compose exec -T -w /var/www/html -u root php vendor/bin/pimcore-install \
         --mysql-host-socket=db \
         --mysql-port=3306 \
         --mysql-username=pimcore \
@@ -377,7 +377,7 @@ install_pimcore() {
 fix_league_csv() {
     log_info "Pinning league/csv to ^9.7.4 (Pimcore 10.6.9 compatibility fix)..."
 
-    run_docker_compose exec -T php bash -c \
+    run_docker_compose exec -T -w /var/www/html php bash -c \
         "COMPOSER_ALLOW_SUPERUSER=1 composer require league/csv:'^9.7.4' --no-audit --no-interaction"
 
     log_success "league/csv pinned to ^9.7.4 (fix saved to composer.lock)"
@@ -389,7 +389,7 @@ fix_league_csv() {
 
 fix_permissions() {
     log_info "Fixing file permissions..."
-    run_docker_compose exec -T -u root php bash -c \
+    run_docker_compose exec -T -w /var/www/html -u root php bash -c \
         "mkdir -p /var/www/html/var/log && chown -R www-data:www-data /var/www/html/var && chmod -R 775 /var/www/html/var"
     log_success "Permissions fixed"
 }
@@ -400,7 +400,7 @@ fix_permissions() {
 
 clear_cache() {
     log_info "Clearing cache..."
-    run_docker_compose exec -T php bin/console cache:clear
+    run_docker_compose exec -T -w /var/www/html php bin/console cache:clear
     log_success "Cache cleared"
 }
 
