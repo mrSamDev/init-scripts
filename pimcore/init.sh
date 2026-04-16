@@ -372,7 +372,7 @@ install_pimcore() {
 fix_league_csv() {
     log_info "Pinning league/csv to ^9.7.4 (Pimcore 10.6.9 compatibility fix)..."
 
-    run_docker_compose exec -T php bash -c \
+    run_docker_compose exec -T -u www-data php bash -c \
         "composer require league/csv:'^9.7.4' --no-audit --no-interaction"
 
     log_success "league/csv pinned to ^9.7.4 (fix saved to composer.lock)"
@@ -384,7 +384,7 @@ fix_league_csv() {
 
 fix_permissions() {
     log_info "Fixing file permissions..."
-    run_docker_compose exec -T -u root php chown -R www-data:www-data /var/www/html/var
+    run_docker_compose exec -T -u root php chown -R "$(id -u):$(id -g)" /var/www/html/var
     run_docker_compose exec -T -u root php chmod -R 775 /var/www/html/var
     log_success "Permissions fixed"
 }
@@ -449,8 +449,8 @@ main() {
     wait_for_services     #         wait for PHP + DB
     install_pimcore       # Step 8: vendor/bin/pimcore-install
     fix_league_csv        # Step 9: downgrade league/csv to ^9.7.4
-    fix_permissions       #         chown var/ to www-data
     clear_cache           # Step 10: bin/console cache:clear
+    fix_permissions       #         chown var/ to host user
     show_completion_message
 }
 
