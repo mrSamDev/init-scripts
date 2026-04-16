@@ -5,6 +5,7 @@ set -e
 PROJECT_NAME="pimcore-demo"
 REPO_URL="https://github.com/pimcore/demo.git"
 REQUIRED_SERVICES=("docker" "docker-compose")
+HOST_PORT=80
 
 # Colors for output (disabled on Windows CMD)
 if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "win32" ]]; then
@@ -252,6 +253,48 @@ setup_env() {
     fi
 }
 
+check_port_in_use() {
+    local port=$1
+    if command -v lsof &>/dev/null; then
+        lsof -i TCP:"$port" -sTCP:LISTEN -t &>/dev/null
+    elif command -v ss &>/dev/null; then
+        ss -tlnp | grep -q ":$port "
+    else
+        (echo >/dev/tcp/localhost/"$port") &>/dev/null
+    fi
+}
+
+setup_port() {
+    log_info "Checking port availability..."
+
+    if check_port_in_use 80; then
+        log_warning "Port 80 is already in use. Searching for an available port..."
+
+        for try_port in 8080 8081 8082 8083 8090 9000; do
+            if ! check_port_in_use "$try_port"; then
+                HOST_PORT=$try_port
+                break
+            fi
+        done
+
+        if [ "$HOST_PORT" -eq 80 ]; then
+            log_error "Could not find a free port (tried 8080 8081 8082 8083 8090 9000). Free a port and retry."
+            exit 1
+        fi
+
+        log_info "Using port $HOST_PORT instead of 80"
+    fi
+
+    # Persist into .env so docker-compose picks it up via \${HTTP_PORT:-80}
+    if grep -q "^HTTP_PORT=" .env 2>/dev/null; then
+        sed -i.bak "s/^HTTP_PORT=.*/HTTP_PORT=$HOST_PORT/" .env && rm -f .env.bak
+    else
+        echo "HTTP_PORT=$HOST_PORT" >> .env
+    fi
+
+    log_success "Nginx port set to $HOST_PORT"
+}
+
 start_containers() {
     log_info "Starting Docker containers..."
     run_docker_compose up -d
@@ -321,7 +364,7 @@ show_completion_message() {
     log_success "Pimcore is ready!"
     echo "================================================================="
     echo ""
-    echo "👉 Access URL: http://localhost/admin"
+    echo "👉 Access URL: http://localhost:${HOST_PORT}/admin"
     echo "👤 Username:   admin"
     echo "🔑 Password:   admin"
     echo ""
@@ -352,6 +395,7 @@ main() {
     patch_bundles_php
     patch_ecommerce_yaml
     setup_env
+    setup_port
     start_containers
     wait_for_services
     install_pimcore
