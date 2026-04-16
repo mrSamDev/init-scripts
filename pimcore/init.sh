@@ -346,6 +346,13 @@ install_pimcore() {
     fi
 }
 
+fix_permissions() {
+    log_info "Fixing file permissions..."
+    run_docker_compose exec -T -u root php chown -R www-data:www-data /var/www/html/var
+    run_docker_compose exec -T -u root php chmod -R 775 /var/www/html/var
+    log_success "Permissions fixed"
+}
+
 install_assets() {
     log_info "Installing assets..."
     run_docker_compose exec -T php bin/console assets:install --symlink --relative
@@ -399,6 +406,7 @@ main() {
     start_containers
     wait_for_services
     install_pimcore
+    fix_permissions
     install_assets
     clear_cache
     show_completion_message
