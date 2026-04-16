@@ -217,8 +217,12 @@ patch_docker_compose_user() {
         sed -i.bak "s|#user: '1000:1000'|user: '$(id -u):$(id -g)'|g" "$compose_file"
         rm -f "${compose_file}.bak"
         log_success "docker-compose user set to $(id -u):$(id -g)"
+    elif grep -q "user: '1000:1000'" "$compose_file"; then
+        sed -i.bak "s|user: '1000:1000'|user: '$(id -u):$(id -g)'|g" "$compose_file"
+        rm -f "${compose_file}.bak"
+        log_success "docker-compose user updated to $(id -u):$(id -g)"
     else
-        log_info "No '#user:' placeholder found in $compose_file — skipping"
+        log_info "No user placeholder found in $compose_file — skipping"
     fi
 }
 
@@ -286,7 +290,7 @@ run_docker_compose() {
 
 start_containers() {
     log_info "Starting Docker containers..."
-    run_docker_compose up -d
+    run_docker_compose up -d --force-recreate
     log_success "Containers started"
 
     log_info "Verifying all containers are running..."
@@ -304,7 +308,7 @@ wait_for_services() {
     local attempt=1
 
     while [ $attempt -le $max_attempts ]; do
-        if run_docker_compose exec -T -w /var/www/html php php -v &>/dev/null; then
+        if run_docker_compose exec -T --workdir / php php -v &>/dev/null; then
             log_success "PHP container is ready"
             break
         fi
@@ -322,7 +326,7 @@ wait_for_services() {
     attempt=1
 
     while [ $attempt -le $max_attempts ]; do
-        if run_docker_compose exec -T -w /var/www/html php php -r \
+        if run_docker_compose exec -T --workdir / php php -r \
             "new PDO('mysql:host=db;port=3306;dbname=pimcore', 'pimcore', 'pimcore');" \
             &>/dev/null; then
             log_success "Database is ready"
@@ -350,11 +354,11 @@ install_pimcore() {
     fi
 
     log_info "Preparing var/ directory..."
-    run_docker_compose exec -T -w /var/www/html -u root php bash -c \
+    run_docker_compose exec -T --workdir / -u root php bash -c \
         "mkdir -p /var/www/html/var/log /var/www/html/var/cache && chmod -R 777 /var/www/html/var"
 
     log_info "Running Pimcore installer (this can take 5–15 minutes)..."
-    run_docker_compose exec -T -w /var/www/html -u root php vendor/bin/pimcore-install \
+    run_docker_compose exec -T --workdir / -u root php /var/www/html/vendor/bin/pimcore-install \
         --mysql-host-socket=db \
         --mysql-port=3306 \
         --mysql-username=pimcore \
@@ -370,17 +374,17 @@ install_pimcore() {
 # =============================================================================
 # Step 9 — Fix CsvFormulaFormatter type mismatch
 # Pimcore 10.6.9's CsvFormulaFormatter declares string $field but league/csv
-# newer versions changed it to mixed. Downgrade to a compatible version.
-# This is saved to composer.lock so all team members get the fix automatically.
+# 9.8.0+ changed the signature to mixed. Pin to exactly 9.7.4 (last compatible
+# version). This is saved to composer.lock so all team members get the fix.
 # =============================================================================
 
 fix_league_csv() {
-    log_info "Pinning league/csv to ^9.7.4 (Pimcore 10.6.9 compatibility fix)..."
+    log_info "Pinning league/csv to exactly 9.7.4 (Pimcore 10.6.9 compatibility fix)..."
 
-    run_docker_compose exec -T -w /var/www/html php bash -c \
-        "COMPOSER_ALLOW_SUPERUSER=1 composer require league/csv:'^9.7.4' --no-audit --no-interaction"
+    run_docker_compose exec -T --workdir / php bash -c \
+        "cd /var/www/html && COMPOSER_ALLOW_SUPERUSER=1 composer require league/csv:'9.7.4' --no-audit --no-interaction"
 
-    log_success "league/csv pinned to ^9.7.4 (fix saved to composer.lock)"
+    log_success "league/csv pinned to 9.7.4 (fix saved to composer.lock)"
 }
 
 # =============================================================================
@@ -389,8 +393,8 @@ fix_league_csv() {
 
 fix_permissions() {
     log_info "Fixing file permissions..."
-    run_docker_compose exec -T -w /var/www/html -u root php bash -c \
-        "mkdir -p /var/www/html/var/log && chown -R www-data:www-data /var/www/html/var && chmod -R 775 /var/www/html/var"
+    run_docker_compose exec -T --workdir / -u root php bash -c \
+        "mkdir -p /var/www/html/var/log /var/www/html/var/cache && chown -R $(id -u):$(id -g) /var/www/html/var && chmod -R 775 /var/www/html/var"
     log_success "Permissions fixed"
 }
 
@@ -400,7 +404,7 @@ fix_permissions() {
 
 clear_cache() {
     log_info "Clearing cache..."
-    run_docker_compose exec -T -w /var/www/html php bin/console cache:clear
+    run_docker_compose exec -T --workdir / php /var/www/html/bin/console cache:clear
     log_success "Cache cleared"
 }
 
@@ -421,14 +425,16 @@ show_completion_message() {
     echo "⚠️  Change the admin password after your first login."
     echo ""
     echo "Daily commands (run inside $PROJECT_NAME/):"
-    echo "  docker compose up -d          # Start containers"
-    echo "  docker compose down           # Stop containers"
-    echo "  docker compose ps             # Check status"
-    echo "  docker compose exec php bash  # Shell into PHP container"
-    echo "  docker compose exec php bin/console cache:clear"
+    echo "  docker compose up -d                        # Start containers"
+    echo "  docker compose down                         # Stop containers"
+    echo "  docker compose ps                           # Check status"
+    echo "  docker compose exec --workdir / php bash    # Shell into PHP container"
+    echo "  docker compose exec --workdir / php /var/www/html/bin/console cache:clear"
+    echo ""
+    echo "Note: --workdir / is required on Docker Engine 27+ (bind-mount WORKDIR restriction)."
     echo ""
     echo "Security note:"
-    echo "  Run 'docker compose exec php bash -c \"composer audit\"' to review CVEs."
+    echo "  Run 'docker compose exec --workdir / php bash -c \"composer audit\"' to review CVEs."
     echo ""
 }
 
@@ -452,8 +458,9 @@ main() {
     setup_port            # Step 6: auto-detect port conflict
     start_containers      # Step 7: docker compose up -d
     wait_for_services     #         wait for PHP + DB
-    fix_permissions       #         chown var/ to www-data before install
+    fix_permissions       #         chown var/ to host user before install
     install_pimcore       # Step 8: vendor/bin/pimcore-install
+    fix_permissions       #         re-chown var/ after install (installer runs as root)
     fix_league_csv        # Step 9: downgrade league/csv to ^9.7.4
     clear_cache           # Step 10: bin/console cache:clear
     show_completion_message
