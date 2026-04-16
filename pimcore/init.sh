@@ -2,7 +2,7 @@
 
 set -e
 
-SCRIPT_VERSION="v1.0.0"
+SCRIPT_VERSION="v1.0.1"
 PROJECT_NAME="my-pimcore-10"
 PIMCORE_VERSION="10.6.9"
 SKELETON_VERSION="v10.2.6"
@@ -344,7 +344,7 @@ wait_for_services() {
 install_pimcore() {
     log_info "Checking Pimcore installation..."
 
-    if [ -f "var/config/system.yaml" ]; then
+    if [ -f "var/config/system.yaml" ] || [ -f "var/config/system.yml" ]; then
         log_info "Pimcore is already installed — skipping."
         return 0
     fi
