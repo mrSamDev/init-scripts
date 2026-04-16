@@ -384,8 +384,8 @@ fix_league_csv() {
 
 fix_permissions() {
     log_info "Fixing file permissions..."
-    run_docker_compose exec -T -u root php chown -R "$(id -u):$(id -g)" /var/www/html/var
-    run_docker_compose exec -T -u root php chmod -R 775 /var/www/html/var
+    run_docker_compose exec -T -u root php bash -c \
+        "mkdir -p /var/www/html/var/log && chown -R www-data:www-data /var/www/html/var && chmod -R 775 /var/www/html/var"
     log_success "Permissions fixed"
 }
 
@@ -447,10 +447,10 @@ main() {
     setup_port            # Step 6: auto-detect port conflict
     start_containers      # Step 7: docker compose up -d
     wait_for_services     #         wait for PHP + DB
+    fix_permissions       #         chown var/ to www-data before install
     install_pimcore       # Step 8: vendor/bin/pimcore-install
     fix_league_csv        # Step 9: downgrade league/csv to ^9.7.4
     clear_cache           # Step 10: bin/console cache:clear
-    # fix_permissions       #         chown var/ to host user
     show_completion_message
 }
 
