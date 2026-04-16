@@ -450,7 +450,7 @@ main() {
     install_pimcore       # Step 8: vendor/bin/pimcore-install
     fix_league_csv        # Step 9: downgrade league/csv to ^9.7.4
     clear_cache           # Step 10: bin/console cache:clear
-    fix_permissions       #         chown var/ to host user
+    # fix_permissions       #         chown var/ to host user
     show_completion_message
 }
 
