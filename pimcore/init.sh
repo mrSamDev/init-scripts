@@ -2,7 +2,7 @@
 
 set -e
 
-SCRIPT_VERSION="v1.0.1"
+SCRIPT_VERSION="v1.0.2"
 PROJECT_NAME="my-pimcore-10"
 PIMCORE_VERSION="10.6.9"
 SKELETON_VERSION="v10.2.6"
@@ -377,8 +377,8 @@ install_pimcore() {
 fix_league_csv() {
     log_info "Pinning league/csv to ^9.7.4 (Pimcore 10.6.9 compatibility fix)..."
 
-    run_docker_compose exec -T -u www-data php bash -c \
-        "composer require league/csv:'^9.7.4' --no-audit --no-interaction"
+    run_docker_compose exec -T php bash -c \
+        "COMPOSER_ALLOW_SUPERUSER=1 composer require league/csv:'^9.7.4' --no-audit --no-interaction"
 
     log_success "league/csv pinned to ^9.7.4 (fix saved to composer.lock)"
 }
