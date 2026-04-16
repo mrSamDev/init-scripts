@@ -317,11 +317,13 @@ wait_for_services() {
         log_warning "PHP container took longer than expected. Continuing anyway..."
     fi
 
-    log_info "Waiting for database to be ready..."
+    log_info "Waiting for database to be ready (checking from PHP container)..."
     attempt=1
 
     while [ $attempt -le $max_attempts ]; do
-        if run_docker_compose exec -T db mysqladmin ping -h localhost -u pimcore -ppimcore --silent &>/dev/null; then
+        if run_docker_compose exec -T php php -r \
+            "new PDO('mysql:host=db;port=3306;dbname=pimcore', 'pimcore', 'pimcore');" \
+            &>/dev/null; then
             log_success "Database is ready"
             return 0
         fi
@@ -349,6 +351,7 @@ install_pimcore() {
     log_info "Running Pimcore installer (this can take 5–15 minutes)..."
     run_docker_compose exec -T php vendor/bin/pimcore-install \
         --mysql-host-socket=db \
+        --mysql-port=3306 \
         --mysql-username=pimcore \
         --mysql-password=pimcore \
         --mysql-database=pimcore \
