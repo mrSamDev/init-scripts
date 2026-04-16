@@ -327,7 +327,7 @@ install_pimcore() {
 
     if [ ! -f "var/config/system.yaml" ]; then
         log_info "Running composer install..."
-        run_docker_compose exec -T php composer install --no-interaction --no-security-blocking
+        run_docker_compose exec -T php composer install --no-interaction --no-security-blocking --no-scripts
         log_success "Composer dependencies installed"
 
         log_info "Installing Pimcore..."
