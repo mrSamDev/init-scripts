@@ -2,6 +2,7 @@
 
 set -e
 
+SCRIPT_VERSION="v1.0.0"
 PROJECT_NAME="my-pimcore-10"
 PIMCORE_VERSION="10.6.9"
 SKELETON_VERSION="v10.2.6"
@@ -348,8 +349,12 @@ install_pimcore() {
         return 0
     fi
 
+    log_info "Preparing var/ directory..."
+    run_docker_compose exec -T -u root php bash -c \
+        "mkdir -p /var/www/html/var/log /var/www/html/var/cache && chmod -R 777 /var/www/html/var"
+
     log_info "Running Pimcore installer (this can take 5–15 minutes)..."
-    run_docker_compose exec -T php vendor/bin/pimcore-install \
+    run_docker_compose exec -T -u root php vendor/bin/pimcore-install \
         --mysql-host-socket=db \
         --mysql-port=3306 \
         --mysql-username=pimcore \
@@ -434,7 +439,7 @@ show_completion_message() {
 main() {
     echo ""
     echo "================================================================="
-    echo "🚀 Pimcore $PIMCORE_VERSION Docker Setup"
+    echo "🚀 Pimcore $PIMCORE_VERSION Docker Setup (Script $SCRIPT_VERSION)"
     echo "================================================================="
     echo ""
 
